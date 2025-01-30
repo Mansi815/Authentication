@@ -1,17 +1,104 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import validator
-from pydantic import BaseModel, EmailStr, constr, validator
-from typing import Optional
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 import mysql.connector
+from mysql.connector import Error
+import os
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-import re
+from pydantic import BaseModel, EmailStr, constr
 
 app = FastAPI()
+
+# Database configuration - REPLACE with your actual credentials
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "Mansi@0304",  # Replace with your MySQL password
+    "database": "user_management"
+}
+
+# JWT configuration - Use a secure key
+SECRET_KEY = "956fdd7902341c26b517f39cdfab0fc718c7a4a74b4557d96eea04274eb9aa08b79d22cbe7d264b8037366002b7ba50ad2494adcf4ac0fe99589cd28d19c1271dc31ca5cfa9af17a6e46ad7421836ae6401346c4f2539d9a743405ac6d796520def6373a57669fe3110d9d046aa079867489a0c06da19e72f786506b386b651a98b47c43e52d02275b28e7899c683c908cc54f0024c9f537812aff3fc272eabcd5794a5fca5e196d1569fef4917c2f856db099b485a6312ab8de3e722761908039ce023f56ee466fe232ba5f01202261e643809ab8122e8f8177b506d176aae74c762afbf75b0414fcc6ac19ac04610440b15f9cf04d686d63970d994f23ec9f"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Function to initialize database
+def init_db():
+    try:
+        conn = mysql.connector.connect(
+            host=DB_CONFIG["host"],
+            user=DB_CONFIG["user"],
+            password=DB_CONFIG["password"]
+        )
+        cursor = conn.cursor()
+
+        # Create database if it doesn't exist
+        cursor.execute("CREATE DATABASE IF NOT EXISTS user_management")
+        cursor.execute("USE user_management")
+
+        # Create roles table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS roles (
+                role_id INT PRIMARY KEY AUTO_INCREMENT,
+                role_name VARCHAR(50) NOT NULL UNIQUE
+            )
+        """)
+
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INT PRIMARY KEY AUTO_INCREMENT,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                email VARCHAR(100) NOT NULL UNIQUE,
+                role_id INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (role_id) REFERENCES roles(role_id)
+            )
+        """)
+
+        # Insert roles if they don't exist
+        cursor.execute("INSERT IGNORE INTO roles (role_id, role_name) VALUES (1, 'admin'), (2, 'user')")
+
+        # Create default admin user if it doesn't exist
+        admin_username = "admin"
+        admin_password = "Admin123"  # Change this to a strong admin password
+        admin_email = "admin@example.com"
+
+        # Hash the password
+        hashed_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        cursor.execute("""
+            INSERT IGNORE INTO users (username, password_hash, email, role_id)
+            VALUES (%s, %s, %s, 1)
+        """, (admin_username, hashed_password, admin_email))
+
+        conn.commit()
+        print("Database initialized successfully!")
+
+    except Error as e:
+        print(f"Error initializing database: {e}")
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+# Initialize database on startup
+init_db()
+
+# Get the absolute path to the static and templates directories
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(BASE_DIR, "static")
+templates_dir = os.path.join(BASE_DIR, "templates")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+templates = Jinja2Templates(directory=templates_dir)
 
 # CORS middleware
 app.add_middleware(
@@ -22,37 +109,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database configuration
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "root",
-    "database": "user_management"
-}
-
-# JWT configuration
-SECRET_KEY = "f06a04f47e3d2e65f3e2dcab44250ef74c36b331253e7bcbee87ec0e4a3d431728fdb1b91735ba948ac58c74bb6e3c31cb1381482cf4fbf9fc397b4c419750dd95742557383d021899f1b39e7f2f788b812dda5f91d8f8cbe245bc0431524efecf3c906e87e94186d9c2785df3dab08048e844eea15250884add4e6665bacb55c2b835e4951ce22ee1b8c6eaef18c5d25a9bb5150b7bffbe4bb9b013855ebe35fd4ab5ba5b0b6cc40665a5f7ddcf98e8c93fab9354226009159d78bbd299d9e90445731c6f9f64ff7f5801e953235dd8f3976a3c5c6f19da898078d3507c23069fbe61af8b8d30e54a30a991cfb4ca27aee899529be292e907ce6cc8139c3f86"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 class UserCreate(BaseModel):
-    username: str
-
-    @validator('username')
-    def username_length(cls, v):
-        if not (3 <= len(v) <= 50):
-            raise ValueError('Username must be between 3 and 50 characters')
-        return v
-    password: str
-
-    @validator('password')
-    def password_length(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        return v
+    username: constr(min_length=3, max_length=50)
+    password: constr(min_length=8)
     email: EmailStr
     role_id: int
 
@@ -62,6 +121,12 @@ class Token(BaseModel):
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# Serve the main page
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+# Function to connect to the database
 def get_db():
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
@@ -75,17 +140,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-def validate_password(password: str) -> bool:
-    if len(password) < 8:
-        return False
-    if not re.search(r"[A-Z]", password):
-        return False
-    if not re.search(r"[a-z]", password):
-        return False
-    if not re.search(r"\d", password):
-        return False
-    return True
-
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -93,42 +147,29 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-@app.get("/")
-async def read_root():
-    return {"message": "Welcome to the FastAPI application!"}
-
-@app.get("/favicon.ico")
-async def favicon():
-    return {"message": "No favicon found."}
-
-@app.post("/token")
+@app.post("/api/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
-    
+
     try:
-        cursor.execute(
-            "SELECT user_id, username, password_hash, role_id FROM users WHERE username = %s",
-            (form_data.username,)
-        )
+        cursor.execute("SELECT user_id, username, password_hash, role_id FROM users WHERE username = %s", (form_data.username,))
         user = cursor.fetchone()
-        
+        print(f"User fetched from DB: {user}")
+
         if not user or not verify_password(form_data.password, user["password_hash"]):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password"
-            )
-        
-        access_token = create_access_token(
-            data={"sub": user["username"], "role_id": user["role_id"]}
-        )
+            print("Login failed: Incorrect username or password")
+            raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+        access_token = create_access_token(data={"sub": user["username"], "role_id": user["role_id"]})
         return Token(access_token=access_token, token_type="bearer")
-    
+
     finally:
         cursor.close()
         conn.close()
 
-@app.post("/users/create")
+
+@app.post("/api/users/create")
 async def create_user(user: UserCreate, token: str = Depends(oauth2_scheme)):
     # Verify admin token
     try:
@@ -137,16 +178,10 @@ async def create_user(user: UserCreate, token: str = Depends(oauth2_scheme)):
             raise HTTPException(status_code=403, detail="Only admins can create users")
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
-    if not validate_password(user.password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 8 characters long and contain uppercase, lowercase, and numbers"
-        )
-    
+
     conn = get_db()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute(
             "INSERT INTO users (username, password_hash, email, role_id) VALUES (%s, %s, %s, %s)",
@@ -154,7 +189,7 @@ async def create_user(user: UserCreate, token: str = Depends(oauth2_scheme)):
         )
         conn.commit()
         return {"message": "User created successfully"}
-    except mysql.connector.IntegrityError as e:
+    except mysql.connector.IntegrityError:
         raise HTTPException(status_code=400, detail="Username or email already exists")
     finally:
         cursor.close()
