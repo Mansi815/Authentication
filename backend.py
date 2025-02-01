@@ -1,102 +1,32 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import mysql.connector
-from mysql.connector import Error
 import os
 import bcrypt
-import jwt
-from datetime import datetime, timedelta
+import jwt  # Ensure you have PyJWT installed
 from pydantic import BaseModel, EmailStr, constr
+from typing import Optional
+import datetime
 
 app = FastAPI()
 
-# Database configuration - REPLACE with your actual credentials
+# Database configuration
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "Mansi@0304",  # Replace with your MySQL password
+    "password": "Pratham@2102",  # Replace with actual MySQL password
     "database": "user_management"
 }
-
-# JWT configuration - Use a secure key
-SECRET_KEY = "956fdd7902341c26b517f39cdfab0fc718c7a4a74b4557d96eea04274eb9aa08b79d22cbe7d264b8037366002b7ba50ad2494adcf4ac0fe99589cd28d19c1271dc31ca5cfa9af17a6e46ad7421836ae6401346c4f2539d9a743405ac6d796520def6373a57669fe3110d9d046aa079867489a0c06da19e72f786506b386b651a98b47c43e52d02275b28e7899c683c908cc54f0024c9f537812aff3fc272eabcd5794a5fca5e196d1569fef4917c2f856db099b485a6312ab8de3e722761908039ce023f56ee466fe232ba5f01202261e643809ab8122e8f8177b506d176aae74c762afbf75b0414fcc6ac19ac04610440b15f9cf04d686d63970d994f23ec9f"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Function to initialize database
-def init_db():
-    try:
-        conn = mysql.connector.connect(
-            host=DB_CONFIG["host"],
-            user=DB_CONFIG["user"],
-            password=DB_CONFIG["password"]
-        )
-        cursor = conn.cursor()
-
-        # Create database if it doesn't exist
-        cursor.execute("CREATE DATABASE IF NOT EXISTS user_management")
-        cursor.execute("USE user_management")
-
-        # Create roles table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS roles (
-                role_id INT PRIMARY KEY AUTO_INCREMENT,
-                role_name VARCHAR(50) NOT NULL UNIQUE
-            )
-        """)
-
-        # Create users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INT PRIMARY KEY AUTO_INCREMENT,
-                username VARCHAR(50) NOT NULL UNIQUE,
-                password_hash VARCHAR(255) NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE,
-                role_id INT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (role_id) REFERENCES roles(role_id)
-            )
-        """)
-
-        # Insert roles if they don't exist
-        cursor.execute("INSERT IGNORE INTO roles (role_id, role_name) VALUES (1, 'admin'), (2, 'user')")
-
-        # Create default admin user if it doesn't exist
-        admin_username = "admin"
-        admin_password = "Admin123"  # Change this to a strong admin password
-        admin_email = "admin@example.com"
-
-        # Hash the password
-        hashed_password = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-        cursor.execute("""
-            INSERT IGNORE INTO users (username, password_hash, email, role_id)
-            VALUES (%s, %s, %s, 1)
-        """, (admin_username, hashed_password, admin_email))
-
-        conn.commit()
-        print("Database initialized successfully!")
-
-    except Error as e:
-        print(f"Error initializing database: {e}")
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-
-# Initialize database on startup
-init_db()
 
 # Get the absolute path to the static and templates directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(BASE_DIR, "static")
 templates_dir = os.path.join(BASE_DIR, "templates")
 
-# Mount static files
+# Mount static files (for CSS, JS, images)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory=templates_dir)
 
@@ -115,82 +45,117 @@ class UserCreate(BaseModel):
     email: EmailStr
     role_id: int
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# Serve the main page
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # Function to connect to the database
 def get_db():
+    """ Creates and returns a database connection """
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         return conn
     except mysql.connector.Error as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
+SECRET_KEY = "99f6d476abe0263605e31a2a1c45661738beec626b7b1e7c9113767da11565ac40d59e23041ebb0f35963edbbace059ba256bf370f703ee40f62dc5f863d4dd0edc45d67e0ee50915cbdbf8b562a7b68c150f41fb562592c4233fbaddbd5fe7abeea8ccb3b099a2acc6d17275d59299173d2415faac8b922d3aa77d52f8fdc9422d4c65c0f58fc585b2dc19293d030eb19f7d47e890df715ad51e4b475a85e136971cc8eeedcf3f6ca41eecb414ac18ffac4e1cc23feb41f249a31618f041808c3c87f56233f37daddef651fe5b61abea39bb09bb2b54b887946114aea928e90a81a543272162bac6afa1a61fd19438d774375c4fb1638aeaf46cd44caae653c"  # Use a strong secret key
+ALGORITHM = "HS256"  # Algorithm for encoding the token
+
+def create_token(user_id: int):
+    """ Create a JWT token for the user """
+    expiration = datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Token valid for 1 hour
+    token = jwt.encode({"user_id": user_id, "exp": expiration}, SECRET_KEY, algorithm=ALGORITHM)
+    return token
+
+def verify_token(token: str):
+    """ Verify the JWT token and return the user ID """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload['user_id']  # Return the user ID from the token
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """ Verifies password with bcrypt hash """
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 def get_password_hash(password: str) -> str:
+    """ Hashes password using bcrypt """
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    """ Render the 'index.html' template """
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/api/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(request: LoginRequest):
+    """ Handles login via JSON body """
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("SELECT user_id, username, password_hash, role_id FROM users WHERE username = %s", (form_data.username,))
+        cursor.execute("SELECT user_id, username, password_hash, role_id FROM users WHERE username = %s", (request.username,))
         user = cursor.fetchone()
-        print(f"User fetched from DB: {user}")
 
-        if not user or not verify_password(form_data.password, user["password_hash"]):
-            print("Login failed: Incorrect username or password")
+        if not user or not verify_password(request.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Incorrect username or password")
 
-        access_token = create_access_token(data={"sub": user["username"], "role_id": user["role_id"]})
-        return Token(access_token=access_token, token_type="bearer")
+        # Create a token for the user
+        token = create_token(user["user_id"])
+        return {"access_token": token, "role_id": user["role_id"]}
+
+    except mysql.connector.Error as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     finally:
         cursor.close()
         conn.close()
 
+@app.get("/api/dashboard")
+async def get_dashboard_data(authorization: str = Header(...)):
+    """ Returns dashboard data for the logged-in user """
+    token = authorization.split(" ")[1]  # Extract the token from the header
+    user_id = verify_token(token)  # Verify the token and get the user ID
+
+    # Here you can fetch user-specific data from the database
+    # For demonstration, we'll return a simple message
+    return {"message": "Welcome to your dashboard!", "user_id": user_id}
 
 @app.post("/api/users/create")
-async def create_user(user: UserCreate, token: str = Depends(oauth2_scheme)):
-    # Verify admin token
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("role_id") != 1:  # Admin role_id = 1
-            raise HTTPException(status_code=403, detail="Only admins can create users")
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+async def create_user(user: UserCreate, authorization: str = Header(...)):
+    """ Allows admins to create new users """
+    # Verify the token and extract user information
+    token = authorization.split(" ")[1]  # Extract the token from the header
+    user_id = verify_token(token)  # Verify the token and get the user ID
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
     try:
+        # Check if the user is an admin
+        cursor.execute("SELECT role_id FROM users WHERE user_id = %s", (user_id,))
+        user_role = cursor.fetchone()
+
+        if user_role is None or user_role['role_id'] != 1:  # Assuming role_id 1 is for admin
+            raise HTTPException(status_code=403, detail="Access denied. Only admins can create users.")
+
+        # Hash the password before storing it
+        hashed_password = get_password_hash(user.password)
+
         cursor.execute(
             "INSERT INTO users (username, password_hash, email, role_id) VALUES (%s, %s, %s, %s)",
-            (user.username, get_password_hash(user.password), user.email, user.role_id)
+            (user.username, hashed_password, user.email, user.role_id)
         )
         conn.commit()
-        return {"message": "User created successfully"}
-    except mysql.connector.IntegrityError:
+        return {"message": "User  created successfully"}
+
+    except mysql.connector.IntegrityError as e:
         raise HTTPException(status_code=400, detail="Username or email already exists")
+    except mysql.connector.Error as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
         conn.close()

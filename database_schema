@@ -18,3 +18,7 @@ CREATE TABLE users (
 
 -- Insert default roles
 INSERT INTO roles (role_name) VALUES ('admin'), ('user');
+
+python -c "import bcrypt; print(bcrypt.hashpw(b'admin', bcrypt.gensalt()).decode('utf-8'))"
+INSERT INTO users (username, password_hash, email, role_id) VALUES ('admin', '$2b$12$bYhG06EUSK2/OYl0gMTQJe93HKKzbHwNMcH.ssIM.6g42ZBWLgk/C', 'admin@example.com', 1);
+
