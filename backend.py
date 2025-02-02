@@ -17,7 +17,7 @@ app = FastAPI()
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "Pratham@2102",  # Replace with actual MySQL password
+    "password": "root",  # Replace with actual MySQL password
     "database": "user_management"
 }
 
@@ -58,7 +58,7 @@ def get_db():
     except mysql.connector.Error as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
-SECRET_KEY = "99f6d476abe0263605e31a2a1c45661738beec626b7b1e7c9113767da11565ac40d59e23041ebb0f35963edbbace059ba256bf370f703ee40f62dc5f863d4dd0edc45d67e0ee50915cbdbf8b562a7b68c150f41fb562592c4233fbaddbd5fe7abeea8ccb3b099a2acc6d17275d59299173d2415faac8b922d3aa77d52f8fdc9422d4c65c0f58fc585b2dc19293d030eb19f7d47e890df715ad51e4b475a85e136971cc8eeedcf3f6ca41eecb414ac18ffac4e1cc23feb41f249a31618f041808c3c87f56233f37daddef651fe5b61abea39bb09bb2b54b887946114aea928e90a81a543272162bac6afa1a61fd19438d774375c4fb1638aeaf46cd44caae653c"  # Use a strong secret key
+SECRET_KEY = ""  # Use a strong secret key
 ALGORITHM = "HS256"  # Algorithm for encoding the token
 
 def create_token(user_id: int):
