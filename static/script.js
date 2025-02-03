@@ -44,6 +44,17 @@ async function createUser () {
         return;
     }
 
+    // Validate email and password
+    if (!validateEmail(email)) {
+        showMessage('createMessage', 'Invalid email format.', 'error');
+        return;
+    }
+
+    if (!validatePassword(password)) {
+        showMessage('createMessage', 'Password must be at least 8 characters long and contain at least one number and one uppercase letter.', 'error');
+        return;
+    }
+
     try {
         const response = await fetch('/api/users/create', {
             method: 'POST',
@@ -98,4 +109,17 @@ function showMessage(elementId, message, type) {
     setTimeout(() => {
         element.style.display = 'none';
     }, 3000);
+}
+
+// Email validation function
+function validateEmail(email) {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Basic email regex
+    return re.test(String(email).toLowerCase());
+}
+
+// Password validation function
+function validatePassword(password) {
+    // Password must be at least 8 characters long, contain at least one number and one uppercase letter
+    const re = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/; 
+    return re.test(password);
 }
