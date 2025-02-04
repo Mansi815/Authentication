@@ -9,6 +9,7 @@
 </head>
 <body>
     <div class="container">
+        <!-- Login Form -->
         <div id="loginForm">
             <h2 style="margin-bottom: 1.5rem; text-align: center;">Login</h2>
             <div class="form-group">
@@ -23,6 +24,7 @@
             <div id="loginMessage" class="error" style="display: none;"></div>
         </div>
 
+        <!-- Admin Panel (Only shown when Admin logs in) -->
         <div id="adminPanel" style="display: none;">
             <h2 style="margin-bottom: 1.5rem; text-align: center;">Create User</h2>
             <div class="form-group">
@@ -37,9 +39,16 @@
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" required>
             </div>
-            <button onclick="createUser ()">Create User</button>
+            <button onclick="createUser()">Create User</button>
             <button onclick="logout()" style="margin-top: 1rem; background-color: #dc3545;">Logout</button>
             <div id="createMessage" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- User Dashboard (Only shown when User logs in) -->
+        <div id="userDashboard" style="display: none;">
+            <h2 style="margin-bottom: 1.5rem; text-align: center;">User Dashboard</h2>
+            <p>Welcome to your dashboard, user!</p>
+            <button onclick="logout()" style="margin-top: 1rem; background-color: #dc3545;">Logout</button>
         </div>
     </div>
 </body>
