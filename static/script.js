@@ -14,17 +14,23 @@ async function login() {
         });
 
         const data = await response.json();
+        console.log(data); // Debugging log to check the response
 
         if (response.ok) {
             token = data.access_token; // Store the token in the variable
             localStorage.setItem('token', token); // Store the token in localStorage for persistence
 
             // Assuming the backend response includes the user role, check the role
-            if (data.role_id === 1) { // Example role check for admin
+            if (data.role_id === 1) { // Admin role
+                console.log('Admin logged in');
                 document.getElementById('loginForm').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';
-            } else {
-                showMessage('loginMessage', 'User  login successful', 'success');
+            } else if (data.role_id === 2) { // User role
+                console.log('User logged in');
+                showMessage('loginMessage', 'User login successful', 'success');
+                setTimeout(() => {
+                    displayUserDashboard(); // Show user dashboard after successful login
+                });
             }
         } else {
             showMessage('loginMessage', data.detail || 'Login failed. Please try again.', 'error');
@@ -34,7 +40,13 @@ async function login() {
     }
 }
 
-async function createUser () {
+// New function to display user dashboard on the same page
+function displayUserDashboard() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('userDashboard').style.display = 'block'; // Show user dashboard
+}
+
+async function createUser() {
     const username = document.getElementById('newUsername').value;
     const password = document.getElementById('newPassword').value;
     const email = document.getElementById('email').value;
@@ -73,7 +85,7 @@ async function createUser () {
         const data = await response.json();
 
         if (response.ok) {
-            showMessage('createMessage', 'User  created successfully', 'success');
+            showMessage('createMessage', 'User created successfully', 'success');
             // Clear the input fields after successful creation
             document.getElementById('newUsername').value = '';
             document.getElementById('newPassword').value = '';
@@ -96,6 +108,7 @@ function logout() {
     token = ''; // Clear token
     localStorage.removeItem('token'); // Remove token from localStorage
     document.getElementById('adminPanel').style.display = 'none';
+    document.getElementById('userDashboard').style.display = 'none'; // Hide the user dashboard
     document.getElementById('loginForm').style.display = 'block';
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
