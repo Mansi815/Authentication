@@ -17,7 +17,7 @@ app = FastAPI()
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "Pratham@2102",  # Replace with actual MySQL password
+    "password": "root",  # Replace with actual MySQL password
     "database": "user_management"
 }
 
