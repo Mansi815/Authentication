@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="userDashboard">
+        <h1>Welcome to the User Dashboard !, {username}</h1>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <script src="scripts.js">
+        // On page load, check if the user is logged in and has the correct role
+        window.onload = () => {
+            const token = localStorage.getItem('token');
+            const roleId = localStorage.getItem('role_id');
+
+            if (!token || roleId !== '2') { // If no token or user is not a regular user (role_id 2)
+                // Redirect to login page if unauthorized
+                window.location.href = 'index.html'; 
+            }
+        };
+
+        function logout() {
+            // Clear user data from localStorage
+            localStorage.removeItem('token'); 
+            localStorage.removeItem('role_id'); 
+            // Redirect to login page
+            window.location.href = 'index.html'; 
+        }
+    </script>
+</body>
+</html>

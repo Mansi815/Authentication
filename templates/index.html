@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management System</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <script src="/static/script.js" defer></script>
+    <script src="/static/script.js" defer>
+    </script>
 </head>
 <body>
     <div class="container">
@@ -47,7 +48,9 @@
         <!-- User Dashboard (Only shown when User logs in) -->
         <div id="userDashboard" style="display: none;">
             <h2 style="margin-bottom: 1.5rem; text-align: center;">User Dashboard</h2>
-            <p>Welcome to your dashboard, user!</p>
+            <img src="/static/images/hello.png" alt="User" style="display: block; margin: 0 auto; width: 100px; height: 100px;">
+            <br><p>Welcome to your dashboard !!</p><br>
+            <p id="welcomeMessage" style="font-size: 1.2em; margin-bottom: 2rem;"></p>
             <button onclick="logout()" style="margin-top: 1rem; background-color: #dc3545;">Logout</button>
         </div>
     </div>
