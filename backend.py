@@ -6,7 +6,6 @@ from fastapi.responses import HTMLResponse
 import mysql.connector
 import os
 import bcrypt
-import jwt  # Ensure you have PyJWT installed
 from pydantic import BaseModel, EmailStr, constr
 from typing import Optional
 import datetime
@@ -57,25 +56,6 @@ def get_db():
         return conn
     except mysql.connector.Error as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
-
-SECRET_KEY = "dfa83463b4e63e1461e2c45931f9b323aaa4c826882c163cceb65099af29afe7b2ccb9c9b85a6e36a15160006caffd825fff056f3cb83214be47613a9905b93d08df684268daf2e797b8921421588b754db9f934a92ecf5f10e3852fd616e3643916b82018b3338f300e8f08013227d52fc2ca3bbce639ab02ffe007826ca2a3d473fe60c7a26459607b94be83095da73002927751b4794fa2715622bd2dcf5267561165c805c066e430dbb9519e3b3c8b45319a1c5b9e5dc335bd2726af03c5d2a7015e61d9ef77e12a58032767dd5fbabab3fafef5ba9aa465b92a61d21408d62aa3657ef95064f0df19f0cf6640aab98b9ca79e3cbc001f9b8d4e1dc8ee49"  # Use a strong secret key
-ALGORITHM = "HS256"  # Algorithm for encoding the token
-
-def create_token(user_id: int):
-    """ Create a JWT token for the user """
-    expiration = datetime.datetime.utcnow() + datetime.timedelta(hours=1)  # Token valid for 1 hour
-    token = jwt.encode({"user_id": user_id, "exp": expiration}, SECRET_KEY, algorithm=ALGORITHM)
-    return token
-
-def verify_token(token: str):
-    """ Verify the JWT token and return the user ID """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload['user_id']  # Return the user ID from the token
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """ Verifies password with bcrypt hash """
