@@ -44,6 +44,8 @@ async function login() {
 function displayUserDashboard() {
     document.getElementById('loginForm').style.display = 'none';
     document.getElementById('userDashboard').style.display = 'block'; // Show user dashboard
+    document.getElementById('welcomeMessage').innerHTML = `Hello, <span style="color: blue; font-weight: bold;">${username}</span>!`;
+    console.log(username);
 }
 
 async function createUser() {
